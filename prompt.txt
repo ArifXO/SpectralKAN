@@ -1,3 +1,146 @@
+1. Installing Claude Code
+
+1.1 Install on Your Personal PC (RTX 3060)
+Open a terminal (PowerShell on Windows, Terminal on Mac/Linux) and run these commands one at a time:
+
+# Step 1: Install Node.js first (Claude Code requires it)
+# Go to https://nodejs.org and download the LTS version
+# Or on Linux/Mac:
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Step 2: Install Claude Code globally
+npm install -g @anthropic-ai/claude-code
+
+# Step 3: Verify installation
+claude --version
+
+# Step 4: Login (you need an Anthropic account with Claude Code access)
+claude login
+
+1.2 Install on University PC #53
+Do the exact same steps via your remote desktop or SSH connection to the university PC. Make sure you log in to the same Anthropic account on both machines.
+
+IMPORTANT: Claude Code requires an internet connection to work. Make sure both machines can reach the internet. Your university PC needs it whenever you use Claude Code, even if your training code runs offline.
+
+1.3 How to Launch Claude Code
+# Navigate to your project folder first, then launch
+cd /path/to/your/spectral-kan-project
+claude
+
+# You will see a prompt like this:
+# Claude Code v1.x.x
+# > _
+
+# You are now in Claude Code. Type your prompts here.
+# To exit: press Ctrl+C or type /exit
+
+1.4 Useful Claude Code Commands
+Command	What It Does
+/help	Shows all available commands
+/clear	Clears the conversation context. Use this when starting a new task to free up memory.
+/exit	Exits Claude Code
+Shift+Enter	New line inside your prompt (without submitting). Use for multi-line prompts.
+Up arrow	Recall previous prompts
+/compact	Compresses conversation history to save context window space during long sessions.
+ 
+2. Project Setup: The First 30 Minutes
+This section covers everything you do before writing a single line of ML code.
+
+2.1 Create Your Project Folder Structure
+Open a terminal (NOT Claude Code yet). Create the folder manually:
+
+# On your personal PC
+mkdir spectral-kan
+cd spectral-kan
+git init
+mkdir -p data models configs results notebooks scripts
+touch CLAUDE.md README.md requirements.txt .gitignore
+
+2.2 Write Your CLAUDE.md File
+This is the most important setup step. Claude Code reads CLAUDE.md automatically every session. It is your persistent memory. Open it in any text editor and paste this:
+
+# CLAUDE.md — Project Context for Claude Code
+
+## Project Name
+Spectral-KAN: Interpretable Masked Autoencoding for Biosignals via KAN Decoder
+
+## What We Are Building
+A Masked Autoencoder (MAE) where the decoder is a Kolmogorov-Arnold Network (KAN).
+We pretrain on biosignals (ECG from PTB-XL, audio from ESC-50).
+After training, we analyze the learned KAN spline edges for interpretability.
+
+## Architecture
+- Encoder: ViT-Small (12 layers, 384 hidden dim, 6 heads)
+- Decoder (baseline): Transformer decoder, 2 blocks
+- Decoder (ours): KAN-based decoder using efficient-kan library
+- Masking: 75% of patches masked during pretraining
+
+## Hardware
+- Personal PC: RTX 3060 12GB, use for small experiments
+- University PC: RTX 4070 Ti Super 16GB, use for full runs
+
+## Key Libraries
+- PyTorch 2.x with CUDA
+- timm (for ViT encoder)
+- einops (for tensor reshaping)
+- efficient-kan (for KAN layers)
+- torchaudio (for audio processing)
+- wfdb (for ECG/PTB-XL loading)
+- scipy, matplotlib, wandb
+
+## Datasets
+- ESC-50: /data/ESC-50/ (2000 audio clips, 50 classes)
+- PTB-XL: /data/ptbxl/ (21837 ECG records, 12 leads)
+
+## Key File Locations
+- models/encoder.py: ViT encoder
+- models/decoder_transformer.py: baseline decoder
+- models/decoder_kan.py: KAN decoder (our contribution)
+- models/mae.py: full MAE framework
+- data/ecg_dataset.py: PTB-XL loader
+- data/audio_dataset.py: ESC-50 loader
+- train.py: main training script
+- evaluate.py: linear probe evaluation
+- analyze_edges.py: KAN edge visualization
+
+## DO NOT
+- Do not use ViT-Large (too big for our GPU)
+- Do not use batch size > 128 on RTX 3060
+- Do not use batch size > 256 on RTX 4070 Ti Super
+- Do not change the masking ratio from 0.75 without updating the config
+
+WHY THIS MATTERS: Every time you start Claude Code, it reads this file. This means Claude Code always knows your architecture, your datasets, your hardware limits, and your file structure — without you having to re-explain everything each session.
+
+2.3 Set Up Virtual Environment
+Still in your regular terminal (not Claude Code), set up Python:
+
+# Create virtual environment
+python -m venv venv
+
+# Activate it
+# On Windows:
+venv\Scripts\activate
+# On Linux/Mac:
+source venv/bin/activate
+
+# Now open Claude Code from inside this activated environment
+claude
+
+2.4 First Claude Code Prompt: Install All Dependencies
+Now you are inside Claude Code. Type this as your very first prompt:
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read the CLAUDE.md file to understand this project.
+Then create a requirements.txt file with all the libraries we need for
+this project: PyTorch with CUDA, timm, einops, efficient-kan,
+torchaudio, wfdb, scipy, matplotlib, pandas, wandb, scikit-learn,
+and any other libraries a masked autoencoder + KAN research project
+would need. Then install all of them using pip. Run a quick Python
+import test to verify everything installed correctly. Fix any errors.
+
+Claude Code will create requirements.txt, install everything, and test it. Watch it work. If something fails (like a CUDA version mismatch), it will try to fix it automatically.
+ 
 3. Phase 1: Building the Data Pipeline (Week 1-2)
 
 3.1 Session Start Ritual
@@ -257,3 +400,527 @@ It should:
 - Save chart to results/freq_band_comparison.png
 - Save raw numbers to results/freq_band_results.csv
  
+6. Phase 4: Running Your First Experiments (Week 5-8)
+This phase is about running actual training jobs. The prompts here are less about writing code and more about launching and managing experiments.
+
+6.1 Run Your First Small Training Job
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Run a quick 5-epoch training test with the Transformer decoder
+on ESC-50 to verify the full pipeline works end-to-end.
+Use batch_size=32 on this machine.
+Command: python train.py --config configs/esc50_config.yaml
+Watch for errors in the loss curve.
+The loss should decrease (start around 0.5-1.0, go below 0.3).
+Show me the last 3 lines of the training log.
+
+Let Claude Code run this. Watch the output carefully. Common problems:
+•	CUDA out of memory: Claude Code will reduce batch size automatically. If not, prompt: 'reduce batch size to 16 and try again'
+•	Loss is NaN: Prompt: 'the loss is NaN, diagnose why and fix it'
+•	Very slow: Prompt: 'training is taking too long per epoch, optimize the data loading'
+
+6.2 Launch Baseline Training on University PC
+On your University PC days (Sun/Tue/Thu 1pm), SSH in and do:
+
+# SSH into university PC
+ssh username@university-pc-53-address
+
+# Navigate to project
+cd spectral-kan
+source venv/bin/activate
+
+# Launch Claude Code for the long training session
+claude
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read CLAUDE.md and all project files to understand current state.
+We are on the university PC with an RTX 4070 Ti Super (16GB).
+Launch a full training run with the Transformer decoder on ESC-50
+for 200 epochs with batch_size=128 and mixed precision.
+Use nohup so training continues even if the SSH connection drops:
+  nohup python train.py --config configs/esc50_config.yaml > results/train_transformer.log 2>&1 &
+Show me the process ID so I can monitor it.
+Then show me the tail of the log after 2 minutes to confirm training is running.
+
+6.3 Launch KAN Decoder Training (Same Setup)
+After the Transformer baseline starts, launch the KAN version immediately so both run in parallel (the 4070 Ti Super has enough VRAM for one at a time). Wait for the first to finish, then:
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+The transformer decoder training finished (or is running).
+Now launch a KAN decoder training run on ESC-50 for 200 epochs.
+Update the config to set decoder type to 'kan'.
+Use the same hyperparameters as the transformer run EXCEPT
+set the KAN decoder learning rate to 5e-5 (lower than the encoder LR
+of 1.5e-4, because KAN needs more careful optimization).
+Save the checkpoint to results/checkpoints/kan_esc50/.
+Launch with nohup as before. Show me the log after 2 minutes.
+
+6.4 Monitor and Diagnose Training
+When you check back on a running experiment, use this prompt:
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read the training log file results/train_kan.log.
+Tell me:
+1. Is the loss decreasing smoothly?
+2. Is there any sign of divergence (sudden loss increase)?
+3. What is the current epoch and loss?
+4. Estimate how long until training finishes at this rate.
+5. Are there any warning messages I should be concerned about?
+
+6.5 Debugging Unstable KAN Training
+If the KAN decoder does not train well (common issue), use this diagnostic prompt:
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+The KAN decoder training is unstable. The loss is not decreasing
+as expected. Please diagnose the problem by:
+1. Adding gradient norm logging to the training loop
+2. Running 10 steps and printing per-layer gradient norms
+3. Checking if the KAN spline grids are properly initialized
+If gradients are exploding: reduce learning rate to 1e-5
+If gradients are vanishing: check KAN initialization,
+   try using Group-KAN variant from efficient-kan
+If loss is stable but not decreasing: try FourierKAN instead
+   of B-spline KAN by modifying decoder_kan.py
+Apply the fix and relaunch training.
+ 
+7. Phase 5: The Interpretability Analysis (Week 15-18)
+This is the most novel and important part of your thesis. These prompts build your interpretability analysis from scratch.
+
+7.1 Build the Edge Extraction and Visualization Tool
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create analyze_edges.py — our main interpretability analysis tool.
+It should:
+1. Load a trained KAN decoder checkpoint
+2. Call decoder.get_edge_functions(num_points=500) to extract
+   all spline edge functions as smooth curves
+3. For each edge function array (shape: in_dim x out_dim x 500):
+   a. Compute total variation (how 'wiggly' the curve is):
+      TV = sum of |f(x_i+1) - f(x_i)|
+   b. Compute peak frequency using FFT on the curve values
+   c. Compute curvature using second derivative
+4. Sort all edges by total variation (most active = highest TV)
+5. Create figure 1: grid plot of top 36 most active edges
+   (6x6 grid, each subplot shows one edge function curve)
+   Save to results/kan_edges_top36.png
+6. Create figure 2: histogram of peak frequencies across all edges
+   Save to results/kan_edges_freq_distribution.png
+7. Save all edge statistics to results/edge_statistics.csv
+   with columns: layer, in_dim, out_dim, total_variation,
+   peak_frequency, curvature
+Run it on the PTB-XL KAN checkpoint and show me the results.
+
+7.2 Frequency Matching Analysis
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/frequency_matching.py for the core interpretability claim.
+
+For ECG (PTB-XL) analysis:
+Known clinical ECG frequency bands are:
+- Baseline wander: 0-0.5 Hz
+- P wave: 0.5-10 Hz
+- QRS complex: 10-40 Hz (sharp spike)
+- T wave: 0.5-10 Hz (slower)
+
+The script should:
+1. Load edge statistics from results/edge_statistics.csv
+2. For each edge, check if its peak_frequency falls within
+   one of the known clinical bands
+3. Count what fraction of top-50 active edges match a clinical band
+4. Create figure 3: scatter plot of edge index vs peak frequency,
+   with horizontal shaded regions showing clinical frequency bands.
+   Color points by which clinical band they fall in.
+   Save to results/clinical_band_matching.png
+5. Create figure 4: for the top 5 edges in each clinical band,
+   plot their full spline curve side by side with an idealized
+   version of the waveform they might represent
+   Save to results/top_edges_per_band.png
+6. Print a summary: X% of top-50 active KAN edges correspond to
+   known clinical ECG frequency bands
+Run this on the PTB-XL checkpoint and report the percentage.
+
+7.3 Symbolic Regression on Active Edges
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/symbolic_regression.py to try to find
+mathematical formulas for the most interpretable edges.
+
+For each of the top 20 edges by total variation:
+1. Extract the edge curve as (x_values, y_values) pairs
+2. Try fitting these candidate functions using scipy curve_fit:
+   - sin(ax + b)
+   - Gaussian: a * exp(-b * (x-c)^2)
+   - Sigmoid: a / (1 + exp(-b*(x-c)))
+   - Polynomial: ax^2 + bx + c
+   - Absolute value: a * |x - b| + c
+3. For each candidate, compute R-squared goodness of fit
+4. Pick the best fitting function (highest R^2) if R^2 > 0.85
+5. Create figure 5: for each edge with a good symbolic match,
+   plot the raw spline curve and the fitted symbolic function
+   side by side, with the formula and R^2 shown
+   Save to results/symbolic_matches.png
+6. Save all symbolic regression results to
+   results/symbolic_results.csv with columns:
+   edge_id, best_function, R_squared, parameters
+Run it and show me the best R^2 values found.
+
+7.4 Generate the Master Interpretability Figure
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/make_interpretability_figure.py that
+generates the main thesis figure for the interpretability chapter.
+This figure should be publication-quality.
+
+Layout (3 rows, 3 columns figure):
+Row 1: Three example KAN edges that have high total variation
+       and match known ECG/EEG frequency bands
+Row 2: The FFT spectrum of each of those edges showing
+       the dominant frequency
+Row 3: The corresponding known clinical waveform component
+       that each edge might be representing
+
+Use matplotlib with a clean academic style (no grid lines,
+publication-quality fonts, labeled axes).
+Add a main title and a caption-ready description.
+Save to results/main_interpretability_figure.pdf and .png
+at 300 DPI for publication.
+ 
+8. Phase 6: Ablation Studies (Week 19-21)
+
+8.1 Automated Ablation Runner
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/run_ablations.py that runs all ablation experiments
+automatically and saves results.
+
+Ablation 1 - Decoder architecture (our main ablation):
+Run 4 training jobs on ESC-50 for 100 epochs each:
+a) Transformer decoder (baseline, already done)
+b) MLP decoder (2-layer MLP, matched parameter count)
+c) KAN decoder B-spline grid=5 (our method)
+d) KAN decoder FourierKAN variant
+All other settings identical. Record final MSE and per-band MSE.
+
+Ablation 2 - KAN grid size:
+Run KAN decoder with grid_size in [3, 5, 8, 12].
+Same 100 epochs on ESC-50.
+Record MSE, parameter count, and training time per epoch.
+
+Ablation 3 - Masking ratio:
+Run transformer decoder with masking ratio [0.5, 0.65, 0.75, 0.85].
+Record MSE for each. This shows how sensitive our setup is.
+
+After all runs complete, generate an ablation results table
+saved to results/ablation_results.csv
+and a summary figure saved to results/ablation_summary.png
+
+8.2 SimCLR Diagnostic (Chapter 2 Experiments)
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/simclr_diagnostic.py for the Chapter 2 analysis
+that explains why KAN fails as a SimCLR projection head.
+
+Implement SimCLR with two configurations:
+Config A: Standard MLP projector (3 layers, hidden=2048, out=128)
+Config B: KAN projector (same dims but using KANLinear layers)
+
+Both train on ESC-50 for 50 epochs with NT-Xent loss.
+
+During training, log these 3 quantities every 5 epochs:
+1. Uniformity loss: -log E[exp(-2*||z_i - z_j||^2)]
+   (measures how uniform embeddings are on the sphere)
+2. Singular value spectrum of the embedding matrix:
+   compute SVD of the NxD embedding matrix,
+   save top-20 singular values
+3. Pre-norm activation distribution:
+   compute KS-statistic vs Gaussian for projector outputs
+   before L2 normalization
+
+After training, create 3 figures showing these metrics
+for MLP vs KAN projector side by side.
+Save to results/simclr_diagnostic_fig1/2/3.png
+This becomes Chapter 2 of the thesis.
+ 
+9. Phase 7: Generating Your Results Tables and Figures
+When experiments are done, use these prompts to generate publication-quality results.
+
+9.1 Generate the Main Results Table
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read all CSV files in the results/ directory.
+Generate the main results table for the thesis in two formats:
+1. A LaTeX table (save to results/main_results_table.tex)
+2. A clean matplotlib figure as a rendered table
+   (save to results/main_results_table.png)
+
+The table should have these columns:
+Method | Decoder Params | Overall MSE | Low-Band MSE | Mid-Band MSE
+| High-Band MSE | Linear Probe Acc/AUROC
+
+Rows:
+- MAE + Transformer Decoder (baseline)
+- MAE + MLP Decoder (baseline 2)
+- MAE + KAN Decoder (ours)
+
+Bold the best number in each column.
+Include standard deviations if we ran multiple seeds.
+
+9.2 Generate All Training Curves
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read all training_log.csv files from results/.
+Create a multi-panel figure showing training curves:
+Panel 1: Overall reconstruction loss vs epochs
+         (Transformer vs KAN decoder, same plot)
+Panel 2: Low-frequency band MSE vs epochs
+Panel 3: Mid-frequency band MSE vs epochs
+Panel 4: High-frequency band MSE vs epochs
+
+Use different colors and line styles for each decoder.
+Add a legend, proper axis labels, and a figure title.
+Use a clean academic style.
+Save to results/training_curves.pdf and .png at 300 DPI.
+
+9.3 Parameter Efficiency Plot (Claim 2)
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read ablation_results.csv which has parameter counts and MSE
+for different decoder sizes.
+Create a scatter plot:
+- X axis: number of decoder parameters (log scale)
+- Y axis: overall reconstruction MSE
+- Blue dots: different sizes of Transformer decoder
+- Red dots: different sizes of KAN decoder
+- Draw a best-fit line through each set of points
+- If the KAN line is below the Transformer line at any point,
+  add an annotation arrow showing the gap
+Save to results/parameter_efficiency.pdf and .png at 300 DPI.
+ 
+10. Common Problems and How to Fix Them with Claude Code
+
+10.1 CUDA Out of Memory
+PROMPT TO TYPE INTO CLAUDE CODE:
+I am getting a CUDA out of memory error during training.
+Here is the error: [paste the error message]
+Current batch size is X. I am on RTX 3060 (12GB).
+Please: reduce batch size, enable gradient checkpointing,
+verify mixed precision is enabled, and relaunch training.
+
+10.2 Training Loss is NaN
+PROMPT TO TYPE INTO CLAUDE CODE:
+The training loss became NaN at epoch X.
+Read the training log at results/train.log.
+Please diagnose the cause:
+- Check for NaN in the data loader (add assertions)
+- Check for NaN in the model forward pass (add NaN checks)
+- Reduce learning rate by 10x
+- Enable gradient clipping if not already enabled
+Fix the issue and relaunch training from the last good checkpoint.
+
+10.3 KAN Layer Import Error
+PROMPT TO TYPE INTO CLAUDE CODE:
+I am getting an import error with efficient-kan.
+Error: [paste error]
+Please check if the package is installed correctly.
+If the efficient-kan package has issues, find an alternative:
+either FastKAN or FourierKAN from the kan-benchmark repo.
+Update decoder_kan.py to use whichever alternative works.
+
+10.4 University PC SSH Session Dies Mid-Training
+PROMPT TO TYPE INTO CLAUDE CODE:
+My SSH connection to the university PC dropped while training was running.
+I launched training with nohup so it should still be running.
+Please:
+1. Show me how to reconnect and check if training is still running
+   using: ps aux | grep python
+2. Show me how to read the latest training log
+3. If training died, show me how to resume from the last checkpoint
+
+10.5 KAN Edge Functions Look Like Noise
+PROMPT TO TYPE INTO CLAUDE CODE:
+When I run analyze_edges.py, the KAN edge functions
+all look like random wiggly lines with no clear pattern.
+This suggests the splines are not learning meaningful curves.
+Please diagnose:
+1. Is the KAN decoder actually being trained (not frozen)?
+2. What is the total variation of the top edges? (If very small,
+   the edges are mostly flat and the attention layer is doing all the work)
+3. Try visualizing edges from a model trained for longer
+4. Try increasing grid_size to 10 or 15 and retraining
+5. Try using FourierKAN instead of B-spline KAN,
+   as Fourier basis functions should be more interpretable
+Implement whichever fix seems most promising and rerun.
+ 
+11. Managing Long Sessions and Context
+
+11.1 The Problem with Long Sessions
+Claude Code has a context window limit. In a long session (2+ hours), it may start to forget earlier parts of the conversation or make mistakes because its context is full. Signs of this: it starts ignoring your CLAUDE.md, it forgets file locations, or it repeats code that already exists.
+
+11.2 How to Reset Without Losing Progress
+When you notice context drift, do this:
+
+# Inside Claude Code, type:
+/compact
+
+# Or start a fresh session:
+/exit
+# Then reopen:
+claude
+
+# And use your session start ritual prompt from Section 3.1
+
+11.3 Save Every Good Prompt
+Create a file called prompts_that_worked.txt in your project. Every time Claude Code successfully does something complex, paste the prompt into this file. This is your reusable prompt library.
+
+# In prompts_that_worked.txt, organize like this:
+
+=== DATA LOADER (Week 1) ===
+[paste the exact prompt that built your data loader]
+
+=== KAN DECODER BUILD (Week 2) ===
+[paste the exact prompt that built decoder_kan.py]
+
+=== EDGE EXTRACTION (Week 15) ===
+[paste the exact prompt that built analyze_edges.py]
+
+11.4 University PC Slot Strategy
+You have 12-hour slots on University PC (Sun/Tue/Thu). Here is the optimal workflow:
+
+Time	Activity
+1:00pm	SSH in. Open Claude Code. Use session start ritual. Review what is currently running.
+1:00-1:30pm	Diagnose any overnight training results. Collect metrics. Fix any issues.
+1:30-2:00pm	Launch new training jobs for the current phase (transformer or KAN, ESC-50 or PTB-XL).
+2:00-8:00pm	Training runs in background. Work on personal PC: code new scripts, write thesis sections, do reading.
+8:00-11:00pm	Check progress. Launch any remaining jobs. Start ablation experiments.
+11:00pm-1am	Final check. Ensure nohup jobs are running and will continue after slot ends.
+ 
+12. Writing Assistance with Claude Code
+Claude Code is not just for coding. You can use it to help write your thesis too.
+
+12.1 Write the Method Section
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read all files in models/ directory, especially decoder_kan.py.
+Read CLAUDE.md for project context.
+Write the Method section of a research paper describing our approach.
+It should be approximately 600 words, in academic English.
+Include subsections:
+3.1 Masked Autoencoder Framework
+3.2 KAN Decoder Architecture
+3.3 Spectral Reconstruction Objective
+3.4 Post-Training Interpretability Analysis
+Use LaTeX math notation for equations.
+Write it as if submitting to NeurIPS 2026.
+Save the output to writing/method_section.tex
+
+12.2 Generate a Results Narrative
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read results/main_results_table.csv and results/freq_band_results.csv
+and results/edge_statistics.csv.
+Write the Results section of the paper (approximately 500 words).
+Describe what the numbers show in academic English.
+Be specific: quote actual numbers from the CSV files.
+Highlight: which frequency band shows the biggest improvement,
+what percentage of edges correspond to clinical bands,
+and what the parameter efficiency comparison shows.
+Save to writing/results_section.tex
+
+12.3 Check Your Writing
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read writing/method_section.tex
+Please:
+1. Fix any grammatical errors
+2. Improve academic tone where it sounds informal
+3. Check that all equations are correctly formatted in LaTeX
+4. Flag any claims that are too strong and need hedging
+5. Suggest where a figure reference should be added
+Save the improved version back to the same file.
+ 
+13. Quick Reference: Prompt Templates
+Print this page. These are the core prompts you will use repeatedly.
+
+Session Start (use every time)
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read CLAUDE.md and all files in models/, data/, configs/, results/.
+Tell me the current state of the project and what phase we are in.
+
+Build a New File
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create [filename] with a [ClassName] class that:
+- [requirement 1]
+- [requirement 2]
+- [requirement 3]
+Test it by running [specific test].
+Fix any errors.
+
+Launch a Training Run
+PROMPT TO TYPE INTO CLAUDE CODE:
+Launch training with [config/settings] on this machine ([GPU name]).
+Use nohup if this is the university PC.
+Save checkpoints to [path].
+Show me the log after 2 minutes to confirm it is running.
+
+Diagnose a Problem
+PROMPT TO TYPE INTO CLAUDE CODE:
+I have this error: [paste error]
+Read [relevant files] and diagnose the cause.
+Fix it. Then verify the fix works by running [test command].
+
+Generate a Figure
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read [data files].
+Create a publication-quality figure showing [what to show].
+Use clean academic style, 300 DPI.
+Save to results/[filename].pdf and .png
+
+Explain Your Own Code
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read models/decoder_kan.py.
+Explain what get_edge_functions() does in plain English.
+Then explain why we designed it this way architecturally.
+
+13.1 Master Schedule: When to Use Which Prompt
+
+Wk	Phase	Main Prompts to Use
+1	Setup	Install deps, create CLAUDE.md, build ESC-50 loader
+2	Data	Build PTB-XL loader, test data loaders, create configs
+3-4	Models	Build encoder, transformer decoder, KAN decoder, MAE framework
+5-8	Training	Run ESC-50 and PTB-XL training, diagnose issues, collect checkpoints
+9-14	Eval	Freq-band MSE analysis, parameter sweep, linear probe evaluation
+15-18	Interp	Edge extraction, frequency matching, symbolic regression, master figure
+19-21	Ablations	Run all ablations, SimCLR diagnostic, compile results tables
+22-28	Writing	Method section, results narrative, writing checks, defense slides
+ 
+14. Final Checklist Before Each University PC Slot
+Print this checklist. Before each 12-hour university PC slot, verify all items.
+
+Before leaving your personal PC
+•	All new code changes are committed to Git and pushed
+•	I know which training job I want to launch today
+•	The config YAML for today's job is ready and correct
+•	I know how long the job should take (from Section 2.3 estimates)
+
+When you log into university PC
+•	Pull latest code from Git: git pull
+•	Activate virtual environment: source venv/bin/activate
+•	Check GPU is free: nvidia-smi
+•	Open Claude Code and do session start ritual
+•	Verify CLAUDE.md is up to date with any new info
+
+Before launching a training job
+•	Double-check the config YAML for typos
+•	Verify dataset is downloaded and in the right location
+•	Run a 2-epoch test first on a tiny batch to catch errors
+•	Then launch the real job with nohup
+•	Record the process ID and log file location
+
+Before your slot ends (11:30pm check)
+•	Training job is still running (ps aux | grep python)
+•	Log file is being written to
+•	Checkpoints are saving correctly
+•	No error messages in the last 50 lines of the log
+
+
+Good luck. Claude Code is a powerful tool — treat it like a senior engineer you can ask anything. The more specific your prompts, the better the output. Save every prompt that works. And most importantly: take the deferral, work the plan, and trust the process.
