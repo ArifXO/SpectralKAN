@@ -47,3 +47,13 @@ After training, we analyze the learned KAN spline edges for interpretability.
 - Do not use batch size > 128 on RTX 3060
 - Do not use batch size > 256 on RTX 4070 Ti Super
 - Do not change the masking ratio from 0.75 without updating the config
+
+## Sync Setup
+- Syncthing is running on both machines and syncs these folders automatically:
+  - results/checkpoints/  → model checkpoints (.pt files)
+  - results/              → CSV logs, figures, eval results
+  - training_logs/        → nohup output logs
+- Code changes go through Git (git push / git pull)
+- Checkpoint/result files come through Syncthing (no Git needed for those)
+- Personal PC path:  A:\UNI\CSE400\SpectralKAN
+- University PC path: /home/[yourname]/spectral-kan-project/
