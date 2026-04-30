@@ -56,4 +56,4 @@ After training, we analyze the learned KAN spline edges for interpretability.
 - Code changes go through Git (git push / git pull)
 - Checkpoint/result files come through Syncthing (no Git needed for those)
 - Personal PC path:  A:\UNI\CSE400\SpectralKAN
-- University PC path: /home/[yourname]/spectral-kan-project/
+- University PC path: E:\CSE400\SpectralKAN
