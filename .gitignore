@@ -23,6 +23,9 @@ wandb/
 # Jupyter
 .ipynb_checkpoints/
 
+#docs
+docs/
+
 # Training outputs (Syncthing handles these between machines)
 results/
 checkpoints/

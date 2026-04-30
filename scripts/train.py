@@ -106,7 +106,7 @@ def build_dataloaders(raw: dict) -> tuple[DataLoader, DataLoader | None, int]:
     data = raw.get("data", {})
     training = raw.get("training", {})
     name = data.get("dataset", "esc50")
-    batch_size = int(training.get("batch_size", 64))
+    batch_size = int(training.get("batch_size", 128))
     num_workers = int(data.get("num_workers", 4))
 
     if name == "esc50":

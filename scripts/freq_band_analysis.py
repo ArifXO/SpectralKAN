@@ -180,7 +180,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--kan-checkpoint", required=True, help="Path to KAN-decoder MAE .pt")
     p.add_argument("--dataset", required=True, choices=["esc50", "ptbxl"])
     p.add_argument("--data-root", default=None, help="Override default data root")
-    p.add_argument("--batch-size", type=int, default=64)
+    p.add_argument("--batch-size", type=int, default=128)
     p.add_argument("--num-workers", type=int, default=0)
     p.add_argument("--device", default="cuda")
     p.add_argument(

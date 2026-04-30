@@ -213,7 +213,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", required=True, help="Path to MAE checkpoint .pt")
     parser.add_argument("--dataset", required=True, choices=["esc50", "ptbxl"])
     parser.add_argument("--data-root", default=None, help="Override data root from config")
-    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--linear-epochs", type=int, default=100)
     parser.add_argument("--linear-lr", type=float, default=0.1)
