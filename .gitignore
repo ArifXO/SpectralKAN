@@ -23,15 +23,19 @@ wandb/
 # Jupyter
 .ipynb_checkpoints/
 
-# Training outputs
+# Training outputs (Syncthing handles these between machines)
 results/
 checkpoints/
 runs/
 outputs/
+training_logs/
 *.pt
 *.pth
 *.ckpt
 *.onnx
+
+# Syncthing startup scripts (machine-specific, paths differ per PC)
+scripts/start_syncthing.*
 
 # Local datasets and downloaded archives
 data/ESC-50/
