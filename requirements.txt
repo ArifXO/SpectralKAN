@@ -1,0 +1,32 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+# Core deep learning stack with CUDA-enabled PyTorch wheels.
+torch
+torchvision
+torchaudio
+torchcodec
+
+# MAE / ViT / KAN modeling.
+timm
+einops
+efficient-kan @ git+https://github.com/Blealtan/efficient-kan.git
+
+# Biosignal, audio, and scientific computing.
+wfdb
+numpy
+scipy
+pandas
+scikit-learn
+librosa
+soundfile
+
+# Experiment tracking, visualization, and utilities.
+matplotlib
+seaborn
+wandb
+tqdm
+PyYAML
+h5py
+ipykernel
+jupyter
+pytest

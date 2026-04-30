@@ -1,0 +1,14 @@
+inherits: base_config.yaml
+
+decoder:
+  type: kan
+  decoder_embed_dim: 512
+  decoder_num_heads: 8
+  kan_hidden_dim: 512
+  kan_grid_size: 5
+  kan_spline_order: 3
+
+data:
+  dataset: ptbxl
+  data_root: data/ptbxl
+  num_workers: 4

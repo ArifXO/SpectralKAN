@@ -1,0 +1,69 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Local environment and secrets
+.env
+.env.*
+*.local
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Training outputs
+results/
+checkpoints/
+runs/
+outputs/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Local datasets and downloaded archives
+data/ESC-50/
+data/ptbxl/
+data/*.zip
+data/*.tar
+data/*.tar.gz
+data/*.tgz
+data/*.h5
+data/*.hdf5
+
+# Generated figures, logs, and metrics
+*.log
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Keep source configs and notebooks trackable despite broad generated-output ignores
+!configs/*.yaml
+!notebooks/*.ipynb
+
+# Local tools and large binaries
+tools/ffmpeg/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Project assistant/local metadata
+.claude/

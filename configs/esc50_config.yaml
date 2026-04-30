@@ -1,0 +1,6 @@
+inherits: base_config.yaml
+
+data:
+  dataset: esc50
+  data_root: data/ESC-50
+  num_workers: 4

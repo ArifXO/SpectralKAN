@@ -1,0 +1,259 @@
+3. Phase 1: Building the Data Pipeline (Week 1-2)
+
+3.1 Session Start Ritual
+Every time you open a new Claude Code session, start with this exact prompt before anything else:
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Read CLAUDE.md and all files in the models/, data/, and configs/
+directories. Understand the current state of the project.
+Tell me what has been built so far and what is still missing.
+
+This gives Claude Code full context. Never skip this step.
+
+3.2 Build the ESC-50 Audio Data Loader
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create data/audio_dataset.py with an ESC50Dataset class.
+It should:
+- Load .wav files from data/ESC-50/audio/
+- Convert each clip to a mel spectrogram using torchaudio
+  (n_mels=128, n_fft=1024, hop_length=512, sample_rate=22050)
+- Normalize the spectrogram to zero mean and unit variance
+- Return spectrogram tensor and class label
+- Support train/val/test splits using the ESC-50 fold system
+  (folds 1-4 = train, fold 5 = test)
+- Include a DataLoader factory function get_esc50_loaders()
+  that takes batch_size and num_workers as arguments
+After writing the file, run a quick test: load 4 samples,
+print their shapes, and display the min/max values.
+Fix any errors before finishing.
+
+3.3 Build the PTB-XL ECG Data Loader
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create data/ecg_dataset.py with a PTBXLDataset class.
+It should:
+- Load ECG records from data/ptbxl/ using the wfdb library
+- Use the ptbxl_database.csv file for metadata and labels
+- Load at 100Hz sampling rate (not 500Hz) to keep data manageable
+- Each ECG is 12 leads x 1000 samples (10 seconds at 100Hz)
+- Convert ECG to a 2D spectrogram using Short-Time Fourier Transform:
+  treat 12 leads as 12 channels, compute STFT per lead,
+  stack into shape (12, freq_bins, time_frames)
+- Normalize per-channel to zero mean and unit variance
+- Labels: use the superclass labels (NORM, MI, STTC, CD, HYP)
+  as a multi-hot binary vector of length 5
+- Support train/val/test splits using the strat_fold column
+  (folds 1-8 = train, fold 9 = val, fold 10 = test)
+Include a get_ptbxl_loaders() factory function.
+After writing, run a test: load 4 ECG samples,
+print shapes, verify labels are multi-hot vectors.
+
+3.4 Test Data Loaders Together
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create a file scripts/test_dataloaders.py that:
+- Tests both the ESC-50 and PTB-XL data loaders
+- Loads one batch from each
+- Prints shapes, dtypes, and value ranges
+- Plots one sample spectrogram from each dataset
+  and saves the figures to results/data_samples.png
+- Reports training, validation, and test set sizes
+Then run it. Fix any errors.
+
+3.5 Create Base Config Files
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create configs/base_config.yaml with all hyperparameters
+for training. Include sections for:
+- model: encoder type (vit_small), patch_size, embed_dim,
+  depth, num_heads, masking_ratio (0.75)
+- decoder: type (transformer or kan), decoder_depth (2),
+  decoder_embed_dim (512), kan_grid_size (5), kan_order (3)
+- training: epochs (200), batch_size (64), lr (1.5e-4),
+  warmup_epochs (40), weight_decay (0.05),
+  device (cuda), mixed_precision (true)
+- data: dataset (esc50), data_root (data/), num_workers (4)
+- logging: use_wandb (false), save_every (20),
+  output_dir (results/)
+Also create configs/esc50_config.yaml and
+configs/ptbxl_config.yaml that inherit from base
+and override dataset-specific settings.
+ 
+4. Phase 2: Building the Models (Week 2-4)
+
+4.1 Build the ViT Encoder
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create models/encoder.py with a SpectralViTEncoder class.
+It should:
+- Accept input spectrograms of any shape
+- Divide the spectrogram into non-overlapping patches
+- For ESC-50: input (1, 128, T), patch_size=16
+- For PTB-XL: input (12, F, T), patch_size=16
+- Use timm to build a ViT-Small backbone
+  (embed_dim=384, depth=12, num_heads=6)
+- Implement random masking: randomly mask 75% of patches
+  and return only the visible 25%
+- Also return the mask indices so the decoder knows
+  which patches to reconstruct
+- Include a method patch_to_img() to convert
+  patch predictions back to image/spectrogram format
+After writing, test it: pass a fake batch of shape
+(4, 1, 128, 128) through the encoder and print
+the output shape and mask shape.
+
+4.2 Build the Transformer Decoder (Baseline)
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create models/decoder_transformer.py with a
+TransformerDecoder class. This is our baseline decoder.
+It should:
+- Take the encoded visible patches and the mask tokens
+- Reconstruct the full sequence (visible + masked positions)
+- Use 2 standard Transformer blocks
+  (embed_dim=512, num_heads=8, mlp_ratio=4.0)
+- Output a patch prediction for every masked position
+- Match the reconstruction to the original patch values
+Include a count_parameters() method that prints
+the total number of trainable parameters.
+Test by passing a fake encoder output through it.
+
+4.3 Build the KAN Decoder (Your Core Contribution)
+This is the most important file in your entire project. Take care with this prompt.
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create models/decoder_kan.py with a KANDecoder class.
+This is our main contribution — a KAN-based decoder for MAE.
+
+Architecture design:
+- Input: encoded visible patches + mask tokens
+  (same interface as TransformerDecoder for easy swapping)
+- Option A (default): A hybrid design with:
+  1. One standard multi-head self-attention layer
+     (to handle positional relationships between patches)
+  2. Then two KAN layers using efficient-kan's KANLinear:
+     (input_dim -> hidden_dim -> output_dim)
+     where hidden_dim = 512 and output_dim = patch_size^2 * channels
+  Use KANLinear with grid_size=5 and spline_order=3
+- Output: patch predictions for masked positions
+
+Also implement:
+- get_edge_functions(num_points=200): extracts all KAN
+  spline edge functions as numpy arrays for interpretability analysis
+  Returns dict: {layer_name: array of shape (in_dim, out_dim, num_points)}
+- count_parameters(): total trainable params
+
+Use efficient-kan library (from the efficient_kan package).
+Test it: pass same fake input as TransformerDecoder,
+confirm output shapes match. Print parameter count.
+Fix any import errors.
+
+4.4 Build the Full MAE Framework
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create models/mae.py with a MaskedAutoencoder class.
+It should:
+- Accept an encoder and a decoder as constructor arguments
+  so we can easily swap between TransformerDecoder and KANDecoder
+- Forward pass:
+  1. Patchify the input spectrogram
+  2. Pass through encoder (which randomly masks 75% of patches)
+  3. Pass encoder output through decoder
+  4. Compute reconstruction loss (MSE on masked patches only)
+- Include a reconstruct() method for inference that:
+  1. Takes a masked spectrogram
+  2. Returns the full reconstructed spectrogram
+  3. Also returns which patches were masked
+- Include compute_frequency_band_loss() method that:
+  1. Takes original and reconstructed spectrograms
+  2. Splits into low/mid/high frequency bands using column slicing
+  3. Returns MSE for each band separately
+  This is needed for our Claim 1 evaluation.
+
+Create a factory function build_mae(config) that reads
+a config dict and builds the full MAE with the right decoder.
+Test by building both versions (transformer and kan decoder)
+and running a forward pass with fake data.
+
+4.5 Verify Both Models Are Equivalent
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/verify_models.py that:
+- Builds MAE with TransformerDecoder
+- Builds MAE with KANDecoder
+- Passes the same input through both
+- Confirms output shapes are identical
+- Prints parameter counts for both
+  (they should be roughly similar for a fair comparison)
+- Tests that get_edge_functions() works on the KAN decoder
+  and returns the right shape
+Run it and show me the results.
+ 
+5. Phase 3: Building the Training Pipeline (Week 3-4)
+
+5.1 Build the Main Training Script
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create train.py, the main training script.
+It should:
+- Parse a config YAML file as command line argument:
+  python train.py --config configs/esc50_config.yaml
+- Build the model using build_mae() from models/mae.py
+- Load the appropriate dataset based on config
+- Training loop with:
+  - Mixed precision (torch.cuda.amp.autocast)
+  - Cosine learning rate schedule with linear warmup
+  - AdamW optimizer
+  - Gradient clipping at 1.0
+  - Progress bar using tqdm
+- Save checkpoints every N epochs to results/checkpoints/
+  Checkpoint includes: model state, optimizer state,
+  epoch number, config, and current loss
+- Resume from checkpoint if checkpoint path is provided
+- Log losses to a CSV file results/training_log.csv
+- If wandb is enabled in config, log to wandb
+- At the end of each epoch, log:
+  total loss, per-frequency-band loss (low/mid/high)
+Test by running 2 epochs on ESC-50 with a tiny batch.
+Verify checkpoints are saved and loss log is created.
+
+5.2 Build the Evaluation Script
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create evaluate.py for linear probe evaluation.
+It should:
+- Load a pretrained MAE checkpoint
+- Freeze the encoder completely
+- Add a linear classification head on top
+- Train the linear head for 100 epochs with a high LR (0.1)
+- For ESC-50: single-label classification, report accuracy
+- For PTB-XL: multi-label classification, report macro-AUROC
+- Also implement k-NN evaluation (no training, just 1-NN or 5-NN
+  in the embedding space) as a quick sanity check
+- Save results to results/eval_results.csv
+Command format:
+  python evaluate.py --checkpoint results/checkpoints/epoch_200.pt
+                     --dataset esc50
+Test with a random (untrained) checkpoint to verify the script runs.
+
+5.3 Build the Frequency-Band Analysis Script
+
+PROMPT TO TYPE INTO CLAUDE CODE:
+Create scripts/freq_band_analysis.py.
+This script is for our Claim 1 evaluation.
+It should:
+- Load a trained checkpoint (transformer decoder and KAN decoder)
+- Run reconstruction on the test set
+- For each reconstructed spectrogram:
+  1. Split into 3 frequency bands by slicing the mel dimension:
+     low = rows 0 to 42, mid = rows 43 to 85, high = rows 86 to 128
+  2. Compute MSE separately for each band
+  3. For ECG additionally compute MSE per clinical band using
+     scipy bandpass filtering at [0-5Hz, 5-15Hz, 15-40Hz]
+- Average across the test set
+- Output a bar chart comparing transformer vs KAN decoder
+  MSE for each frequency band
+- Save chart to results/freq_band_comparison.png
+- Save raw numbers to results/freq_band_results.csv
+ 
