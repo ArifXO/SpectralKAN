@@ -264,6 +264,12 @@ def parse_args() -> argparse.Namespace:
         help="Override decoder.type",
     )
     parser.add_argument(
+        "--decoder-lr",
+        type=float,
+        default=None,
+        help="Override training.decoder_lr (separate LR for decoder param group)",
+    )
+    parser.add_argument(
         "--run-dir",
         type=str,
         default=None,
@@ -290,6 +296,8 @@ def main() -> None:
         raw.setdefault("training", {})["seed"] = args.seed
     if args.decoder_type is not None:
         raw.setdefault("decoder", {})["type"] = args.decoder_type
+    if args.decoder_lr is not None:
+        raw.setdefault("training", {})["decoder_lr"] = args.decoder_lr
 
     seed = int(raw.get("training", {}).get("seed", 42))
     seed_everything(seed)
@@ -308,12 +316,20 @@ def main() -> None:
     training = raw.get("training", {})
     epochs = int(training.get("epochs", 200))
     lr = float(training.get("lr", 1.5e-4))
+    decoder_lr = float(training.get("decoder_lr", lr))
     weight_decay = float(training.get("weight_decay", 0.05))
     warmup_epochs = int(training.get("warmup_epochs", 40))
     use_amp = bool(training.get("mixed_precision", True)) and device.type == "cuda"
 
+    if decoder_lr != lr:
+        param_groups = [
+            {"params": list(model.encoder.parameters()), "lr": lr},
+            {"params": list(model.decoder.parameters()), "lr": decoder_lr},
+        ]
+    else:
+        param_groups = list(model.parameters())
     optimizer = torch.optim.AdamW(
-        model.parameters(),
+        param_groups,
         lr=lr,
         betas=(0.9, 0.95),
         weight_decay=weight_decay,
@@ -381,12 +397,13 @@ def main() -> None:
             print(f"[warn] resume path {resume_path} not found; starting fresh.")
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    lr_info = f"lr={lr:.2e}" if decoder_lr == lr else f"enc_lr={lr:.2e}|dec_lr={decoder_lr:.2e}"
     print(
         f"device={device} | dataset={raw.get('data', {}).get('dataset')} | "
         f"decoder={bridged['decoder']['type']} | params={n_params:,} | "
         f"epochs={epochs} | batch_size={training.get('batch_size')} | "
         f"steps/epoch={steps_per_epoch} | AMP={'on' if use_amp else 'off'} | "
-        f"run_dir={output_dir}"
+        f"{lr_info} | run_dir={output_dir}"
     )
 
     band_eval_batch = fetch_band_eval_batch(val_loader or train_loader)

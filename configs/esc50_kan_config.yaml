@@ -8,6 +8,9 @@ decoder:
   kan_grid_size: 5
   kan_spline_order: 3
 
+training:
+  decoder_lr: 5.0e-5
+
 data:
   dataset: esc50
   data_root: data/ESC-50
