@@ -71,6 +71,10 @@ def parse_args() -> argparse.Namespace:
         help="Override decoder.type",
     )
     parser.add_argument(
+        "--decoder-lr", type=float, default=None,
+        help="Override training.decoder_lr (separate LR for decoder param group)",
+    )
+    parser.add_argument(
         "--run-dir", type=str, default=None,
         help="Explicit run directory. Fresh runs otherwise create a new folder under logging.output_dir.",
     )
@@ -92,6 +96,8 @@ def apply_cli_overrides(raw: dict, args: argparse.Namespace) -> None:
         raw.setdefault("training", {})["seed"] = args.seed
     if args.decoder_type is not None:
         raw.setdefault("decoder", {})["type"] = args.decoder_type
+    if args.decoder_lr is not None:
+        raw.setdefault("training", {})["decoder_lr"] = args.decoder_lr
 
 
 def main() -> None:
@@ -200,13 +206,16 @@ def main() -> None:
         else:
             print(f"[warn] resume path {resume_path} not found; starting fresh.")
 
+    lr = float(training.get("lr", 1.5e-4))
+    decoder_lr = float(training.get("decoder_lr", lr))
+    lr_info = f"lr={lr:.2e}" if decoder_lr == lr else f"enc_lr={lr:.2e}|dec_lr={decoder_lr:.2e}"
     print(
         f"device={device} | dataset={raw.get('data', {}).get('dataset')} | "
         f"decoder={bridged['decoder']['type']} | params={total_params:,} "
         f"(enc={encoder_params:,} dec={decoder_params:,}) | "
         f"epochs={epochs} | batch_size={training.get('batch_size')} | "
         f"steps/epoch={steps_per_epoch} | AMP={'on' if use_amp else 'off'} | "
-        f"run_dir={output_dir}"
+        f"{lr_info} | run_dir={output_dir}"
     )
 
     decoder_type = bridged["decoder"]["type"]

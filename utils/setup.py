@@ -203,11 +203,27 @@ def make_lr_lambda(warmup_steps: int, total_steps: int, min_ratio: float = 0.0):
 
 
 def build_optimizer(model: torch.nn.Module, training_cfg: dict) -> torch.optim.Optimizer:
-    """AdamW with the He et al. 2022 MAE betas."""
+    """AdamW with the He et al. 2022 MAE betas.
+
+    If ``training_cfg["decoder_lr"]`` is set and differs from ``lr``, the
+    encoder and decoder go into separate param groups so the decoder can use
+    its own learning rate (useful for the KAN decoder, which often prefers a
+    smaller LR than the ViT encoder).
+    """
     lr = float(training_cfg.get("lr", 1.5e-4))
+    decoder_lr = float(training_cfg.get("decoder_lr", lr))
     weight_decay = float(training_cfg.get("weight_decay", 0.05))
+
+    if decoder_lr != lr and hasattr(model, "encoder") and hasattr(model, "decoder"):
+        param_groups = [
+            {"params": list(model.encoder.parameters()), "lr": lr},
+            {"params": list(model.decoder.parameters()), "lr": decoder_lr},
+        ]
+    else:
+        param_groups = list(model.parameters())
+
     return torch.optim.AdamW(
-        model.parameters(),
+        param_groups,
         lr=lr,
         betas=(0.9, 0.95),
         weight_decay=weight_decay,
