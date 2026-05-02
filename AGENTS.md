@@ -1,4 +1,4 @@
-# Codex.md — Project Context for codex
+# AGENTS.md — Project Context
 
 ## Project Name
 SpectralKAN: Interpretable Masked Autoencoding for Biosignals via KAN Decoder
@@ -35,15 +35,34 @@ After training, we analyze the learned KAN spline edges for interpretability.
 - models/encoder.py: ViT encoder
 - models/decoder_transformer.py: baseline decoder
 - models/decoder_kan.py: KAN decoder (our contribution)
+- models/decoder_utils.py: shared mask-token splice helper
 - models/mae.py: full MAE framework
 - data/ecg_dataset.py: PTB-XL loader
 - data/audio_dataset.py: ESC-50 loader
-- train.py: main training script
-- evaluate.py: linear probe evaluation
-- analyze_edges.py: KAN edge visualization
+- scripts/train.py: main training script
+- scripts/evaluate.py: linear probe evaluation
+- scripts/freq_band_analysis.py: frequency-band reconstruction analysis
+- utils/setup.py: config loading, dataloaders, optimizer/scheduler, seeds, run dirs
+- utils/training_loop.py: train_one_epoch / validate_one_epoch / band-loss helpers
+- utils/periodic_evals.py: periodic feature-tracking + KAN edge-tracking helpers
+- utils/checkpointing.py: checkpoint save/load and run summary
+- utils/logging_utils.py: CSV + wandb logging helpers
+- utils/metrics.py: pure metric helpers (band MSE, kNN, FLOPs, GPU mem)
+- utils/edge_tracker.py: KAN edge statistics and snapshot helpers
+- utils/output_paths.py: run-dir resolution helpers
 
 ## DO NOT
 - Do not use ViT-Large (too big for our GPU)
 - Do not use batch size > 128 on RTX 3060
 - Do not use batch size > 256 on RTX 4070 Ti Super
 - Do not change the masking ratio from 0.75 without updating the config
+
+## Sync Setup
+- Syncthing is running on both machines and syncs these folders automatically:
+  - results/checkpoints/  → model checkpoints (.pt files)
+  - results/              → CSV logs, figures, eval results
+  - training_logs/        → nohup output logs
+- Code changes go through Git (git push / git pull)
+- Checkpoint/result files come through Syncthing (no Git needed for those)
+- Personal PC path:  A:\UNI\CSE400\SpectralKAN
+- University PC path: E:\CSE400\SpectralKAN

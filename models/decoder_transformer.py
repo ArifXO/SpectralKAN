@@ -4,6 +4,11 @@ import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
 
+try:
+    from .decoder_utils import splice_mask_tokens
+except ImportError:
+    from decoder_utils import splice_mask_tokens
+
 
 class TransformerDecoder(nn.Module):
     """Baseline MAE decoder.
@@ -83,27 +88,7 @@ class TransformerDecoder(nn.Module):
             reconstruction loss to masked positions.
         """
         x = self.decoder_embed(x)
-
-        B, _, D = x.shape
-        N = ids_restore.size(1)
-        len_keep = x.size(1) - 1
-        num_masked = N - len_keep
-
-        if N + 1 > self.decoder_pos_embed.size(1):
-            raise ValueError(
-                f"Input requires {N} patch positions but decoder_pos_embed "
-                f"only holds {self.decoder_pos_embed.size(1) - 1}. "
-                "Increase max_patches."
-            )
-
-        mask_tokens = self.mask_token.expand(B, num_masked, D)
-        x_no_cls = torch.cat([x[:, 1:, :], mask_tokens], dim=1)
-        x_no_cls = torch.gather(
-            x_no_cls, 1, ids_restore.unsqueeze(-1).expand(-1, -1, D)
-        )
-        x = torch.cat([x[:, :1, :], x_no_cls], dim=1)
-
-        x = x + self.decoder_pos_embed[:, : N + 1]
+        x = splice_mask_tokens(x, ids_restore, self.mask_token, self.decoder_pos_embed)
 
         for blk in self.blocks:
             x = blk(x)

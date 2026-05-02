@@ -141,8 +141,14 @@ def get_esc50_loaders(
     batch_size: int,
     num_workers: int,
     root: str | Path = "data/ESC-50",
-    val_fold: Optional[int] = None,
+    val_fold: Optional[int] = 4,
 ) -> tuple[DataLoader, Optional[DataLoader], DataLoader]:
+    """Backward-compatible 3-way loader factory.
+
+    Default split: folds 1-3 = train, fold 4 = val, fold 5 = test.
+    Test (fold 5) is fixed by ESC-50 convention; do not change it.
+    Pass ``val_fold=None`` to keep the legacy "train = folds 1-4, val = None" behaviour.
+    """
     train_dataset = ESC50Dataset(root=root, split="train", val_fold=val_fold)
     val_dataset = (
         ESC50Dataset(root=root, split="val", val_fold=val_fold)

@@ -10,6 +10,7 @@ decoder:
   type: transformer
   decoder_depth: 2
   decoder_embed_dim: 512
+  decoder_num_heads: 8
 
 training:
   epochs: 200
@@ -23,7 +24,6 @@ training:
 
 data:
   dataset: esc50
-  data_root: data/
   num_workers: 4
 
 logging:

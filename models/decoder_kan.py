@@ -5,6 +5,11 @@ import torch
 import torch.nn as nn
 from efficient_kan import KANLinear
 
+try:
+    from .decoder_utils import splice_mask_tokens
+except ImportError:
+    from decoder_utils import splice_mask_tokens
+
 
 class KANDecoder(nn.Module):
     """KAN-based MAE decoder (project contribution).
@@ -96,27 +101,7 @@ class KANDecoder(nn.Module):
 
     def forward(self, x: torch.Tensor, ids_restore: torch.Tensor) -> torch.Tensor:
         x = self.decoder_embed(x)
-
-        B, _, D = x.shape
-        N = ids_restore.size(1)
-        len_keep = x.size(1) - 1
-        num_masked = N - len_keep
-
-        if N + 1 > self.decoder_pos_embed.size(1):
-            raise ValueError(
-                f"Input requires {N} patch positions but decoder_pos_embed "
-                f"only holds {self.decoder_pos_embed.size(1) - 1}. "
-                "Increase max_patches."
-            )
-
-        mask_tokens = self.mask_token.expand(B, num_masked, D)
-        x_no_cls = torch.cat([x[:, 1:, :], mask_tokens], dim=1)
-        x_no_cls = torch.gather(
-            x_no_cls, 1, ids_restore.unsqueeze(-1).expand(-1, -1, D)
-        )
-        x = torch.cat([x[:, :1, :], x_no_cls], dim=1)
-
-        x = x + self.decoder_pos_embed[:, : N + 1]
+        x = splice_mask_tokens(x, ids_restore, self.mask_token, self.decoder_pos_embed)
 
         h = self.attn_norm(x)
         attn_out, _ = self.attn(h, h, h, need_weights=False)
@@ -140,38 +125,29 @@ class KANDecoder(nn.Module):
             ``{layer_name: array of shape (in_dim, out_dim, num_points)}``
             with one entry per KAN layer (``"kan1"``, ``"kan2"``).
         """
-        edges: dict[str, np.ndarray] = {}
-        for name, layer in [("kan1", self.kan1), ("kan2", self.kan2)]:
-            edges[name] = self._extract_edges(layer, num_points)
-        return edges
+        from utils.edge_tracker import sample_kan_edges
 
-    @staticmethod
-    def _extract_edges(layer: KANLinear, num_points: int) -> np.ndarray:
-        in_f = layer.in_features
-        out_f = layer.out_features
-        order = layer.spline_order
-        device = layer.grid.device
-        dtype = layer.base_weight.dtype
+        return {
+            name: sample_kan_edges(layer, num_points)
+            for name, layer in [("kan1", self.kan1), ("kan2", self.kan2)]
+        }
 
-        # Active range = where the spline basis is fully supported,
-        # i.e. between the first and last "real" knots.
-        grid_min = layer.grid[:, order].min().item()
-        grid_max = layer.grid[:, -(order + 1)].max().item()
-        xs = torch.linspace(grid_min, grid_max, num_points, device=device, dtype=dtype)
+    @torch.no_grad()
+    def get_spline_coefficients(self) -> list[np.ndarray]:
+        """Effective spline coefficients per KAN layer.
 
-        # Broadcast xs across every input feature so b_splines evaluates each
-        # feature's own basis at the same query points.
-        x_input = xs.unsqueeze(1).expand(num_points, in_f).contiguous()
-        basis = layer.b_splines(x_input)  # (T, in, num_basis)
+        Returns one numpy array per layer with shape ``(out, in, num_basis)``,
+        the ``scaled_spline_weight`` that efficient-kan actually applies to
+        the B-spline basis (``spline_weight * spline_scaler`` when
+        ``enable_standalone_scale_spline=True``, else just ``spline_weight``).
 
-        scaled = layer.scaled_spline_weight  # (out, in, num_basis)
-        spline_term = torch.einsum("tik,jik->ijt", basis, scaled)
-
-        base_act = layer.base_activation(xs)  # (T,)
-        base_term = layer.base_weight.unsqueeze(-1) * base_act  # (out, in, T)
-        base_term = base_term.permute(1, 0, 2)  # (in, out, T)
-
-        return (spline_term + base_term).detach().cpu().numpy()
+        Available to downstream interpretability tooling that needs compact
+        coefficient tensors instead of sampled edge functions.
+        """
+        coeffs: list[np.ndarray] = []
+        for layer in (self.kan1, self.kan2):
+            coeffs.append(layer.scaled_spline_weight.detach().cpu().numpy())
+        return coeffs
 
     def count_parameters(self) -> int:
         total = sum(p.numel() for p in self.parameters() if p.requires_grad)
@@ -180,6 +156,11 @@ class KANDecoder(nn.Module):
 
 
 if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
     torch.manual_seed(0)
 
     B = 4
@@ -219,3 +200,35 @@ if __name__ == "__main__":
         print(f"edges[{name!r}]: shape={arr.shape}, dtype={arr.dtype}")
 
     decoder.count_parameters()
+
+    print("--- extract_edge_stats / get_spline_coefficients ---")
+    from utils.edge_tracker import extract_edge_stats
+
+    small = KANDecoder(
+        encoder_embed_dim=64,
+        decoder_embed_dim=32,
+        decoder_num_heads=4,
+        kan_hidden_dim=24,
+        kan_grid_size=5,
+        kan_spline_order=3,
+        patch_size=8,
+        in_chans=1,
+        max_patches=64,
+    )
+
+    stats = extract_edge_stats(small, num_points=64)
+    print(f"  stats: {stats}")
+    expected_n_edges = (32 * 24) + (24 * 8 * 8 * 1)
+    assert stats["n_edges"] == expected_n_edges, (stats["n_edges"], expected_n_edges)
+    assert stats["edge_mean_tv"] >= 0.0
+    assert stats["edge_max_tv"] >= stats["edge_mean_tv"]
+
+    coeffs = small.get_spline_coefficients()
+    assert isinstance(coeffs, list) and len(coeffs) == 2, len(coeffs)
+    num_basis = small.kan_grid_size + small.kan_spline_order  # 5 + 3 = 8
+    assert all(isinstance(c, np.ndarray) for c in coeffs)
+    assert coeffs[0].shape == (24, 32, num_basis), coeffs[0].shape
+    assert coeffs[1].shape == (8 * 8 * 1, 24, num_basis), coeffs[1].shape
+    print(f"  coeffs[0].shape={coeffs[0].shape}  coeffs[1].shape={coeffs[1].shape}")
+
+    print("\nAll tests passed.")

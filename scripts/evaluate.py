@@ -29,20 +29,22 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = Path(__file__).resolve().parent
-for path in (PROJECT_ROOT, SCRIPTS_DIR):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.mae import build_mae  # noqa: E402
-from output_paths import infer_run_dir_from_checkpoint  # noqa: E402
-from train import bridge_config  # noqa: E402  -- shared YAML→build_mae translator
+from utils.metrics import compute_knn_classification  # noqa: E402
+from utils.output_paths import infer_run_dir_from_checkpoint  # noqa: E402
+from utils.setup import (  # noqa: E402
+    bridge_config,
+    seed_everything,
+    validate_checkpoint_dataset,
+)
 
 
 def load_eval_loaders(
@@ -94,7 +96,7 @@ def extract_features(
         for batch in tqdm(loader, desc="features", dynamic_ncols=True):
             x, y = batch
             x = x.to(device, non_blocking=True)
-            with torch.amp.autocast("cuda", enabled=use_amp):
+            with torch.amp.autocast(device.type, enabled=use_amp):
                 latent, _mask, _ids, _grid = encoder(x)
             feats.append(latent[:, 0].float().cpu())
             labels.append(y if isinstance(y, torch.Tensor) else torch.as_tensor(y))
@@ -169,31 +171,16 @@ def knn_eval(
     device: torch.device,
 ) -> dict[str, float]:
     """Cosine-similarity k-NN. Multiclass: majority vote. Multilabel: averaged labels."""
-    f_tr_n = F.normalize(f_tr, dim=1).to(device)
-    f_te_n = F.normalize(f_te, dim=1).to(device)
-
-    chunk = 1024
-    chunks: list[torch.Tensor] = []
-    for i in range(0, f_te_n.size(0), chunk):
-        sims = f_te_n[i : i + chunk] @ f_tr_n.T
-        chunks.append(sims.topk(k, dim=1).indices.cpu())
-    top_idx = torch.cat(chunks, dim=0)
-
-    if task == "multiclass":
-        neighbour_labels = y_tr.long()[top_idx]  # (N_test, k)
-        preds = torch.empty(neighbour_labels.size(0), dtype=torch.long)
-        for i in range(neighbour_labels.size(0)):
-            preds[i] = torch.bincount(neighbour_labels[i], minlength=num_classes).argmax()
-        return {"accuracy": float((preds == y_te.long()).float().mean().item())}
-
-    neighbour_labels = y_tr.float()[top_idx]  # (N_test, k, C)
-    scores = neighbour_labels.mean(dim=1).numpy()
-    targets = y_te.numpy()
-    try:
-        auroc = float(roc_auc_score(targets, scores, average="macro"))
-    except ValueError:
-        auroc = float("nan")
-    return {"macro_auroc": auroc}
+    return compute_knn_classification(
+        f_tr,
+        y_tr,
+        f_te,
+        y_te,
+        k_values=(k,),
+        task=task,
+        num_classes=num_classes,
+        device=device,
+    )[k]
 
 
 def append_results(path: Path, rows: list[list]) -> None:
@@ -233,8 +220,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    from train import seed_everything
-
     seed_everything(args.seed)
 
     if args.device == "cuda" and not torch.cuda.is_available():
@@ -254,6 +239,7 @@ def main() -> None:
     raw_cfg = ckpt.get("config", {})
     if not raw_cfg:
         print("[warn] checkpoint has no 'config'; assuming default model dims.")
+    validate_checkpoint_dataset(raw_cfg, args.dataset, checkpoint_path)
 
     in_chans = 1 if args.dataset == "esc50" else 12
     bridged = bridge_config(raw_cfg, in_chans=in_chans)
@@ -269,7 +255,7 @@ def main() -> None:
     for p in encoder.parameters():
         p.requires_grad = False
 
-    data_root = args.data_root or (
+    data_root = args.data_root or raw_cfg.get("data", {}).get("data_root") or (
         "data/ESC-50" if args.dataset == "esc50" else "data/ptbxl"
     )
     train_loader, test_loader, _ic, num_classes, task = load_eval_loaders(

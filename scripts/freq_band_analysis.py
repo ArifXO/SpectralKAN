@@ -41,14 +41,12 @@ import torch
 from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = Path(__file__).resolve().parent
-for path in (PROJECT_ROOT, SCRIPTS_DIR):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.mae import build_mae  # noqa: E402
-from output_paths import infer_common_run_dir  # noqa: E402
-from train import bridge_config  # noqa: E402  -- shared YAML→build_mae translator
+from utils.output_paths import infer_common_run_dir  # noqa: E402
+from utils.setup import bridge_config, validate_checkpoint_dataset  # noqa: E402
 
 
 def load_test_loader(
@@ -79,13 +77,26 @@ def load_test_loader(
     raise ValueError(f"Unknown dataset {dataset!r}")
 
 
-def load_mae(ckpt_path: str, in_chans: int, device: torch.device) -> torch.nn.Module:
+def load_mae(
+    ckpt_path: str,
+    in_chans: int,
+    device: torch.device,
+    expected_decoder: str,
+    dataset: str,
+) -> torch.nn.Module:
     print(f"loading checkpoint: {ckpt_path}")
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
     raw_cfg = ckpt.get("config", {})
     if not raw_cfg:
         print(f"[warn] {ckpt_path} has no 'config'; using default model dims.")
+    validate_checkpoint_dataset(raw_cfg, dataset, ckpt_path)
     bridged = bridge_config(raw_cfg, in_chans=in_chans)
+    actual_decoder = bridged["decoder"]["type"]
+    if actual_decoder != expected_decoder:
+        raise ValueError(
+            f"Checkpoint {ckpt_path} has decoder={actual_decoder!r}; "
+            f"expected {expected_decoder!r} for this argument."
+        )
     model = build_mae(bridged)
     missing, unexpected = model.load_state_dict(ckpt["model"], strict=False)
     if missing or unexpected:
@@ -129,7 +140,7 @@ def joint_band_mse(
         x = x.to(device, non_blocking=True)
         x_ref = x.float()
         for m_name, model in models.items():
-            with torch.amp.autocast("cuda", enabled=use_amp):
+            with torch.amp.autocast(device.type, enabled=use_amp):
                 recon, _mask, _grid = model.reconstruct(x)
             diff2 = (recon.float() - x_ref) ** 2  # (B, C, F, T) — F on dim=-2
             for g_name, bands in band_groups.items():
@@ -238,8 +249,14 @@ def main() -> None:
     transformer_checkpoint = Path(args.transformer_checkpoint)
     kan_checkpoint = Path(args.kan_checkpoint)
 
-    mae_t = load_mae(str(transformer_checkpoint), in_chans, device)
-    mae_k = load_mae(str(kan_checkpoint), in_chans, device)
+    mae_t = load_mae(
+        str(transformer_checkpoint), in_chans, device,
+        expected_decoder="transformer", dataset=args.dataset,
+    )
+    mae_k = load_mae(
+        str(kan_checkpoint), in_chans, device,
+        expected_decoder="kan", dataset=args.dataset,
+    )
 
     print("running test-set reconstruction (both models)...")
     results = joint_band_mse(

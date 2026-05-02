@@ -100,9 +100,10 @@ After training, we analyze the learned KAN spline edges for interpretability.
 - models/mae.py: full MAE framework
 - data/ecg_dataset.py: PTB-XL loader
 - data/audio_dataset.py: ESC-50 loader
-- train.py: main training script
-- evaluate.py: linear probe evaluation
-- analyze_edges.py: KAN edge visualization
+- scripts/train.py: main training script
+- scripts/evaluate.py: linear probe evaluation
+- scripts/freq_band_analysis.py: frequency-band reconstruction analysis
+- utils/edge_tracker.py: KAN edge statistics and snapshot helpers
 
 ## DO NOT
 - Do not use ViT-Large (too big for our GPU)
@@ -338,10 +339,10 @@ Run it and show me the results.
 5.1 Build the Main Training Script
 
 PROMPT TO TYPE INTO CLAUDE CODE:
-Create train.py, the main training script.
+Create scripts/train.py, the main training script.
 It should:
 - Parse a config YAML file as command line argument:
-  python train.py --config configs/esc50_config.yaml
+  python scripts/train.py --config configs/esc50_config.yaml
 - Build the model using build_mae() from models/mae.py
 - Load the appropriate dataset based on config
 - Training loop with:
@@ -364,7 +365,7 @@ Verify checkpoints are saved and loss log is created.
 5.2 Build the Evaluation Script
 
 PROMPT TO TYPE INTO CLAUDE CODE:
-Create evaluate.py for linear probe evaluation.
+Create scripts/evaluate.py for linear probe evaluation.
 It should:
 - Load a pretrained MAE checkpoint
 - Freeze the encoder completely
@@ -376,7 +377,7 @@ It should:
   in the embedding space) as a quick sanity check
 - Save results to results/eval_results.csv
 Command format:
-  python evaluate.py --checkpoint results/checkpoints/epoch_200.pt
+  python scripts/evaluate.py --checkpoint results/checkpoints/epoch_200.pt
                      --dataset esc50
 Test with a random (untrained) checkpoint to verify the script runs.
 
@@ -409,7 +410,7 @@ PROMPT TO TYPE INTO CLAUDE CODE:
 Run a quick 5-epoch training test with the Transformer decoder
 on ESC-50 to verify the full pipeline works end-to-end.
 Use batch_size=32 on this machine.
-Command: python train.py --config configs/esc50_config.yaml
+Command: python scripts/train.py --config configs/esc50_config.yaml
 Watch for errors in the loss curve.
 The loss should decrease (start around 0.5-1.0, go below 0.3).
 Show me the last 3 lines of the training log.
@@ -438,7 +439,7 @@ We are on the university PC with an RTX 4070 Ti Super (16GB).
 Launch a full training run with the Transformer decoder on ESC-50
 for 200 epochs with batch_size=128 and mixed precision.
 Use nohup so training continues even if the SSH connection drops:
-  nohup python train.py --config configs/esc50_config.yaml > results/train_transformer.log 2>&1 &
+  nohup python scripts/train.py --config configs/esc50_config.yaml > results/train_transformer.log 2>&1 &
 Show me the process ID so I can monitor it.
 Then show me the tail of the log after 2 minutes to confirm training is running.
 
@@ -489,7 +490,7 @@ This is the most novel and important part of your thesis. These prompts build yo
 7.1 Build the Edge Extraction and Visualization Tool
 
 PROMPT TO TYPE INTO CLAUDE CODE:
-Create analyze_edges.py — our main interpretability analysis tool.
+Use utils/edge_tracker.py as the core KAN edge analysis helper.
 It should:
 1. Load a trained KAN decoder checkpoint
 2. Call decoder.get_edge_functions(num_points=500) to extract
@@ -738,7 +739,7 @@ Please:
 
 10.5 KAN Edge Functions Look Like Noise
 PROMPT TO TYPE INTO CLAUDE CODE:
-When I run analyze_edges.py, the KAN edge functions
+When I run the KAN edge analysis helpers, the KAN edge functions
 all look like random wiggly lines with no clear pattern.
 This suggests the splines are not learning meaningful curves.
 Please diagnose:
@@ -781,7 +782,7 @@ Create a file called prompts_that_worked.txt in your project. Every time Claude 
 [paste the exact prompt that built decoder_kan.py]
 
 === EDGE EXTRACTION (Week 15) ===
-[paste the exact prompt that built analyze_edges.py]
+[paste the exact prompt that built the edge analysis helpers]
 
 11.4 University PC Slot Strategy
 You have 12-hour slots on University PC (Sun/Tue/Thu). Here is the optimal workflow:

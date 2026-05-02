@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.metrics import compute_band_mse_tensors
 
 try:
     from .encoder import SpectralViTEncoder
@@ -63,19 +64,22 @@ class MaskedAutoencoder(nn.Module):
         std = (var + 1e-6).sqrt()
         return (target - mean) / std, mean, std
 
-    def forward(self, x: torch.Tensor) -> dict:
-        target = self.patchify_target(x)
+    def forward(self, x: torch.Tensor, return_reconstruction: bool = False) -> dict:
+        target_raw = self.patchify_target(x)
+        target = target_raw
 
         latent, mask, ids_restore, grid = self.encoder(x)
         pred = self.decoder(latent, ids_restore)
 
         if self.norm_pix_loss:
-            target, _mean, _std = self._normalize_target(target)
+            target, mean, std = self._normalize_target(target)
+        else:
+            mean = std = None
 
         loss_per_patch = (pred - target).pow(2).mean(dim=-1)
         loss = (loss_per_patch * mask).sum() / mask.sum().clamp(min=1.0)
 
-        return {
+        out = {
             "loss": loss,
             "pred": pred,
             "target": target,
@@ -83,6 +87,30 @@ class MaskedAutoencoder(nn.Module):
             "ids_restore": ids_restore,
             "grid": grid,
         }
+        if return_reconstruction:
+            pred_pixels = pred * std + mean if self.norm_pix_loss else pred
+            out["recon"] = self._compose_reconstruction(
+                target_raw,
+                pred_pixels,
+                mask,
+                grid,
+                original_size=x.shape[-2:],
+            )
+        return out
+
+    def _compose_reconstruction(
+        self,
+        target_patches: torch.Tensor,
+        pred_patches: torch.Tensor,
+        mask: torch.Tensor,
+        grid: tuple[int, int],
+        original_size: tuple[int, int],
+    ) -> torch.Tensor:
+        keep = mask.unsqueeze(-1)
+        composed = target_patches * (1.0 - keep) + pred_patches * keep
+        recon = self.encoder.patch_to_img(composed, grid)
+        h_orig, w_orig = original_size
+        return recon[..., :h_orig, :w_orig]
 
     @torch.no_grad()
     def reconstruct(
@@ -98,22 +126,8 @@ class MaskedAutoencoder(nn.Module):
         is ``(B, N)`` with 1 at masked positions, ``grid`` is the padded patch
         grid ``(h, w)``.
         """
-        _, _, H_orig, W_orig = x.shape
-        target = self.patchify_target(x)
-
-        latent, mask, ids_restore, grid = self.encoder(x)
-        pred = self.decoder(latent, ids_restore)
-
-        if self.norm_pix_loss:
-            _t_norm, mean, std = self._normalize_target(target)
-            pred = pred * std + mean
-
-        keep = mask.unsqueeze(-1)
-        composed = target * (1.0 - keep) + pred * keep
-
-        recon = self.encoder.patch_to_img(composed, grid)
-        recon = recon[..., :H_orig, :W_orig]
-        return recon, mask, grid
+        out = self.forward(x, return_reconstruction=True)
+        return out["recon"], out["mask"], out["grid"]
 
     @staticmethod
     def compute_frequency_band_loss(
@@ -130,27 +144,13 @@ class MaskedAutoencoder(nn.Module):
         Used by the Claim 1 evaluation to check whether the KAN decoder
         distributes reconstruction error differently across frequency bands.
         """
-        if original.shape != reconstructed.shape:
-            raise ValueError(
-                f"shape mismatch: {tuple(original.shape)} vs {tuple(reconstructed.shape)}"
-            )
-        F_size = original.size(freq_dim)
-        if F_size < 3:
-            raise ValueError(f"Need at least 3 bins on freq_dim, got {F_size}")
-        b1 = F_size // 3
-        b2 = 2 * F_size // 3
-
-        def band_mse(start: int, stop: int) -> torch.Tensor:
-            sl = [slice(None)] * original.dim()
-            sl[freq_dim] = slice(start, stop)
-            sl_t = tuple(sl)
-            return F.mse_loss(reconstructed[sl_t], original[sl_t])
-
-        return {
-            "low": band_mse(0, b1),
-            "mid": band_mse(b1, b2),
-            "high": band_mse(b2, F_size),
-        }
+        return compute_band_mse_tensors(
+            reconstructed,
+            original,
+            n_bands=3,
+            freq_dim=freq_dim,
+            names=["low", "mid", "high"],
+        )
 
 
 def build_mae(config: dict) -> MaskedAutoencoder:

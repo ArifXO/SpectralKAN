@@ -217,6 +217,11 @@ def get_ptbxl_loaders(
     root: str | Path = "data/ptbxl",
     download: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Backward-compatible 3-way loader factory.
+
+    Standard PTB-XL stratified split: ``strat_fold`` 1-8 = train,
+    fold 9 = val, fold 10 = test.
+    """
     train_dataset = PTBXLDataset(root=root, split="train", download=download)
     val_dataset = PTBXLDataset(root=root, split="val", download=download)
     test_dataset = PTBXLDataset(root=root, split="test", download=download)
