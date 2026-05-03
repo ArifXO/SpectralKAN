@@ -78,6 +78,17 @@ def parse_args() -> argparse.Namespace:
         "--run-dir", type=str, default=None,
         help="Explicit run directory. Fresh runs otherwise create a new folder under logging.output_dir.",
     )
+    parser.add_argument(
+        "--run-name", type=str, default=None,
+        help="Fresh-run folder stem under logging.output_dir. Existing names get _1, _2 suffixes.",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default=None,
+        help="Override logging.output_dir for fresh runs.",
+    )
+    parser.add_argument("--lr", type=float, default=None, help="Override training.lr")
+    parser.add_argument("--kan-grid-size", type=int, default=None, help="Override decoder.kan_grid_size")
+    parser.add_argument("--warmup-epochs", type=int, default=None, help="Override training.warmup_epochs")
     return parser.parse_args()
 
 
@@ -98,6 +109,14 @@ def apply_cli_overrides(raw: dict, args: argparse.Namespace) -> None:
         raw.setdefault("decoder", {})["type"] = args.decoder_type
     if args.decoder_lr is not None:
         raw.setdefault("training", {})["decoder_lr"] = args.decoder_lr
+    if args.lr is not None:
+        raw.setdefault("training", {})["lr"] = args.lr
+    if args.kan_grid_size is not None:
+        raw.setdefault("decoder", {})["kan_grid_size"] = args.kan_grid_size
+    if args.warmup_epochs is not None:
+        raw.setdefault("training", {})["warmup_epochs"] = args.warmup_epochs
+    if args.output_dir is not None:
+        raw.setdefault("logging", {})["output_dir"] = args.output_dir
 
 
 def main() -> None:
@@ -143,6 +162,7 @@ def main() -> None:
         base_output_dir, args.run_dir, args.resume,
         dataset=str(raw.get("data", {}).get("dataset", "dataset")),
         decoder=str(bridged["decoder"]["type"]),
+        run_name=args.run_name,
     )
     raw.setdefault("logging", {})["run_dir"] = str(output_dir)
 

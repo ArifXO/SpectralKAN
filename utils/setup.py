@@ -251,8 +251,9 @@ def get_run_dir_name(
     resume_arg: str | None,
     dataset: str,
     decoder: str,
+    run_name: str | None = None,
 ) -> Path:
-    """Resolve the run directory: explicit override, resume, or fresh timestamped folder."""
+    """Resolve the run directory: explicit override, resume, or fresh named/timestamped folder."""
     if run_dir_arg is not None:
         output_dir = Path(run_dir_arg)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -261,4 +262,4 @@ def get_run_dir_name(
         output_dir = infer_run_dir_from_checkpoint(resume_arg)
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
-    return make_run_dir(base_output_dir, dataset=dataset, decoder=decoder)
+    return make_run_dir(base_output_dir, dataset=dataset, decoder=decoder, run_name=run_name)

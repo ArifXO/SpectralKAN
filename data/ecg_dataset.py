@@ -114,7 +114,8 @@ class PTBXLDataset(Dataset):
         return scp
 
     def _load_samples(self, download: bool = False) -> list[tuple[Path, torch.Tensor]]:
-        metadata = pd.read_csv(self.metadata_path)
+        metadata = pd.read_csv(self.metadata_path, skipinitialspace=True)
+        metadata.columns = metadata.columns.str.strip()
         required_columns = {"filename_lr", "scp_codes", "strat_fold"}
         missing_columns = required_columns.difference(metadata.columns)
         if missing_columns:

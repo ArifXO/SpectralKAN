@@ -4,11 +4,24 @@ from datetime import datetime
 from pathlib import Path
 
 
-def make_run_dir(base_output_dir: str | Path, dataset: str, decoder: str) -> Path:
-    """Create a unique results/<timestamp>_<dataset>_<decoder> run directory."""
+def make_run_dir(
+    base_output_dir: str | Path,
+    dataset: str,
+    decoder: str,
+    run_name: str | None = None,
+) -> Path:
+    """Create a unique run directory under ``base_output_dir``.
+
+    If ``run_name`` is provided, the directory stem is exactly that name.
+    Otherwise, the legacy ``<timestamp>_<dataset>_<decoder>`` stem is used.
+    Existing stems are made unique by appending ``_1``, ``_2``, and so on.
+    """
     base = Path(base_output_dir)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    stem = f"{stamp}_{dataset}_{decoder}"
+    if run_name is None:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stem = f"{stamp}_{dataset}_{decoder}"
+    else:
+        stem = run_name
     run_dir = base / stem
     suffix = 1
     while run_dir.exists():

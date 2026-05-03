@@ -39,7 +39,7 @@ training_logs/
 
 # Syncthing startup scripts (machine-specific, paths differ per PC)
 scripts/start_syncthing.*
-
+scripts\run_ptbxl_full.ps1*
 # Local datasets and downloaded archives
 data/ESC-50/
 data/ptbxl/
@@ -57,6 +57,7 @@ data/*.hdf5
 *.jpg
 *.jpeg
 *.pdf
+*.sh
 
 # Keep source configs and notebooks trackable despite broad generated-output ignores
 !configs/*.yaml

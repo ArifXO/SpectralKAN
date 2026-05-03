@@ -1,4 +1,4 @@
-# CLAUDE.md — Project Context for Claude Code
+# CLAUDE.md - Project Context for Claude Code
 
 ## Project Name
 SpectralKAN: Interpretable Masked Autoencoding for Biosignals via KAN Decoder
@@ -51,6 +51,19 @@ After training, we analyze the learned KAN spline edges for interpretability.
 - utils/edge_tracker.py: KAN edge statistics and snapshot helpers
 - utils/output_paths.py: run-dir resolution helpers
 
+## Results Layout
+- results/sweeps/: 50-epoch hyperparameter-search runs and sweep summary CSVs
+- results/runs/: full or main training runs
+- Fresh training supports readable run folders:
+  - --run-name <name>: use a readable folder stem instead of a timestamp
+  - --output-dir <path>: override logging.output_dir from the config
+- Use results/sweeps for HP search commands, for example:
+  - python scripts/train.py --config configs/esc50_kan_config.yaml --epochs 50 --run-name esc50_kan_lr1e-4_grid5_seed42 --output-dir results/sweeps
+- Use results/runs for full training commands, for example:
+  - python scripts/train.py --config configs/esc50_kan_config.yaml --epochs 200 --run-name esc50_kan_full_seed42 --output-dir results/runs
+- If --run-name collides with an existing folder, the code appends _1, _2, etc.
+- --run-dir remains the exact-directory override and takes precedence over --run-name.
+
 ## DO NOT
 - Do not use ViT-Large (too big for our GPU)
 - Do not use batch size > 128 on RTX 3060
@@ -59,10 +72,9 @@ After training, we analyze the learned KAN spline edges for interpretability.
 
 ## Sync Setup
 - Syncthing is running on both machines and syncs these folders automatically:
-  - results/checkpoints/  → model checkpoints (.pt files)
-  - results/              → CSV logs, figures, eval results
-  - training_logs/        → nohup output logs
+  - results/ -> checkpoints, CSV logs, figures, eval results
+  - training_logs/ -> nohup output logs
 - Code changes go through Git (git push / git pull)
 - Checkpoint/result files come through Syncthing (no Git needed for those)
-- Personal PC path:  A:\UNI\CSE400\SpectralKAN
+- Personal PC path: A:\UNI\CSE400\SpectralKAN
 - University PC path: E:\CSE400\SpectralKAN
