@@ -1,0 +1,10 @@
+inherits: ptbxl_config.yaml
+
+decoder:
+  type: transformer
+
+training:
+  epochs: 100
+
+logging:
+  feature_every: 50
